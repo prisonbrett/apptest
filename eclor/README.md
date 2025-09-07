@@ -1,9 +1,14 @@
+📖 README — Projet Eclor
+
+⸻
+
 📂 Structure du repo
 	•	Le repo GitHub s’appelle eclor-app.
 	•	Le vrai projet Expo est dans le sous-dossier eclor/.
 👉 Toutes les commandes doivent être lancées depuis eclor/, pas depuis la racine du repo.
 
 Arbo simplifiée :
+
 eclor-app/              # racine repo (git)
  ├── eclor/             # projet Expo
  │    ├── app/          # pages expo-router
@@ -15,26 +20,54 @@ eclor-app/              # racine repo (git)
  └── .gitignore         # ignore .expo, node_modules, etc.
 
 
+⸻
 
 ⚙️ Gestionnaire de paquets
 	•	👉 Yarn uniquement (version 1.22.x actuellement).
 	•	Pas de package-lock.json → supprimé pour éviter les conflits avec npm.
 	•	Dépendances figées dans yarn.lock.
+	•	Les installations globales (comme @expo/ngrok) peuvent être faites via npm -g ou yarn global add, ça n’impacte pas le projet.
+
+⸻
 
 🚀 Commandes principales
 
-   Depuis eclor/ :
-   # Installer les dépendances
-   yarn install
+Depuis eclor/ :
 
-   # Lancer en mode web
-   yarn dev:web
+# Installer les dépendances
+yarn install
 
-   # Lancer avec Expo Go (tunnel)
-   yarn dev:tunnel
+# Lancer en mode web
+yarn dev:web
 
-   # Vérifier la santé du projet
-   yarn doctor   # alias de npx expo-doctor
+# Lancer avec Expo Go (tunnel)
+yarn dev:tunnel
+
+# Vérifier la santé du projet
+yarn doctor   # alias de npx expo-doctor
+
+
+⸻
+
+📑 Scripts utiles (dans package.json)
+
+"scripts": {
+  "dev": "expo start",
+  "dev:web": "expo start --web",
+  "dev:tunnel": "expo start --tunnel",
+  "doctor": "expo-doctor",
+
+  "reset-project": "rm -rf node_modules .expo && yarn install",
+
+  "check:lock": "test -f ../package-lock.json && echo '⚠️ package-lock.json présent (à supprimer)' || echo '✅ Aucun package-lock.json'",
+  "check:mods": "find .. -name node_modules -type d -maxdepth 2"
+}
+
+	•	reset-project : supprime node_modules et .expo, puis réinstalle → utile si le projet bug.
+	•	check:lock : vérifie qu’aucun package-lock.json n’existe (doit rester ✅).
+	•	check:mods : liste les dossiers node_modules trouvés (tu ne dois en avoir qu’un dans eclor/).
+
+⸻
 
 🩺 Santé du projet
 	•	SDK Expo : 53 (dernier à ce jour).
@@ -43,25 +76,43 @@ eclor-app/              # racine repo (git)
 	•	@types/react : ~19.0.10 (aligné SDK).
 	•	expo-doctor → doit afficher 17/17 checks passed ✅.
 
+⸻
+
 📦 Mises à jour de dépendances
-   •	Pour rester compatible Expo SDK, utiliser :
-      npx expo install <package>
-      (et non yarn add ou npm install <pkg>@latest).
+	•	Pour rester compatible Expo SDK, utiliser :
+
+npx expo install <package>
+
+(et pas yarn add ou npm install <pkg>@latest).
+
 	•	Vérifier les versions attendues :
-      npx expo install --check
-	•	Pour les dev deps (TypeScript, types…) → suivre ce que recommande expo-doctor. 
+
+npx expo install --check
+
+
+	•	Pour les dev deps (TypeScript, types…) → suivre ce que recommande expo-doctor.
+
+⸻
 
 🔐 Bonnes pratiques
 	•	Ne jamais committer node_modules/ ou .expo/.
 	•	.expo/ est ignoré via .gitignore (vérifié ✅).
-	•	En cas de doute :     
-      git ls-files .expo   # doit rien afficher
-   •	Si un jour tu vois des versions dupliquées → optionnel :
-      npx yarn-deduplicate -s fewer yarn.lock && yarn install
+	•	En cas de doute :
+
+git ls-files .expo   # doit rien afficher
+
+
+	•	Si un jour tu vois des versions dupliquées → optionnel :
+
+npx yarn-deduplicate -s fewer yarn.lock && yarn install
+
+
+
+⸻
 
 ❗ Points importants à retenir
 	•	Toujours travailler depuis eclor/ (et pas eclor-app/).
-	•	Projet full Yarn, ne jamais repasser à npm.
+	•	Projet full Yarn → ne jamais repasser à npm.
 	•	SDK 53 = dernier disponible actuellement → pas de “SDK 54” encore.
 	•	expo-doctor est la référence → doit rester à 17/17.
 	•	Les warnings “deprecated” lors des installs sont normaux et sans impact.

@@ -12,7 +12,10 @@
     "ios": "expo start --ios",
     "lint": "expo lint",
     "doctor": "expo-doctor",
-    "reset-project": "node ./scripts/reset-project.js"
+    "reset-project": "node ./scripts/reset-project.js",
+    "check:lock": "bash -lc 'set -e; echo Checking for npm artefacts...; (test ! -e ../package-lock.json || echo ../package-lock.json) && (test ! -e package-lock.json || echo package-lock.json) || true; find .. -name npm-shrinkwrap.json || true'",
+    "check:mods": "bash -lc 'echo Node modules trees: && find .. -maxdepth 2 -name node_modules -type d'",
+    "clean:npm":  "bash -lc 'rm -f ../package-lock.json package-lock.json npm-shrinkwrap.json || true'"
   },
   "dependencies": {
     "@expo/vector-icons": "^14.1.0",

@@ -1,75 +1,85 @@
+import { SafeAreaView, View, Text, Pressable, StyleSheet, Platform } from 'react-native';
 import { Image } from 'expo-image';
-import { Platform, StyleSheet } from 'react-native';
+import { useRouter } from 'expo-router';
 
-import { HelloWave } from '@/components/HelloWave';
-import ParallaxScrollView from '@/components/ParallaxScrollView';
-import { ThemedText } from '@/components/ThemedText';
-import { ThemedView } from '@/components/ThemedView';
+const BG = '#A5D2FD';
 
-export default function HomeScreen() {
+const LOGO_SRC = Platform.select({
+  web: require('@/assets/images/logolight.svg'),     // ton svg clair
+  default: require('@/assets/images/icon.png'),      // fallback natif (mets ton png si tu en as un)
+});
+
+export default function MenuScreen() {
+  const router = useRouter();
+
   return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
-      headerImage={
+    <SafeAreaView style={styles.safe}>
+      <View style={styles.container}>
+        {/* Header logo, plus grand */}
         <Image
-          source={require('@/assets/images/partial-react-logo.png')}
-          style={styles.reactLogo}
+          source={LOGO_SRC as any}
+          style={styles.logo}
+          contentFit="contain"
+          accessible
+          accessibilityLabel="Logo"
         />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Welcome!</ThemedText>
-        <HelloWave />
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Try it</ThemedText>
-        <ThemedText>
-          Edit <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> to see changes.
-          Press{' '}
-          <ThemedText type="defaultSemiBold">
-            {Platform.select({
-              ios: 'cmd + d',
-              android: 'cmd + m',
-              web: 'F12',
-            })}
-          </ThemedText>{' '}
-          to open developer tools.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-        <ThemedText>
-          {`Tap the Explore tab to learn more about what's included in this starter app.`}
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-        <ThemedText>
-          {`When you're ready, run `}
-          <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText> to get a fresh{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> directory. This will move the current{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{' '}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
-      </ThemedView>
-    </ParallaxScrollView>
+
+        {/* Menu */}
+        <View style={styles.menu}>
+          <Pressable
+            onPress={() => router.push('/finances')}
+            style={styles.linkHitbox}
+            android_ripple={{ color: 'rgba(255,255,255,0.15)', borderless: false }}
+          >
+            <Text style={styles.linkText}>💶 FINANCES</Text>
+          </Pressable>
+
+          <Pressable
+            onPress={() => router.push('/tasks')}
+            style={styles.linkHitbox}
+            android_ripple={{ color: 'rgba(255,255,255,0.15)', borderless: false }}
+          >
+            <Text style={styles.linkText}>☑️ TASKS</Text>
+          </Pressable>
+        </View>
+      </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  titleContainer: {
-    flexDirection: 'row',
+  safe: {
+    flex: 1,
+    backgroundColor: BG,
+  },
+  container: {
+    flex: 1,
+    backgroundColor: BG,
+    paddingHorizontal: 24,
+    paddingTop: 18,
+  },
+  // ++ logo plus grand
+  logo: {
+    width: 150,    // ← ajuste si besoin
+    height: 100,    // ← ajuste si besoin
+  },
+  menu: {
+    flex: 1,
+    justifyContent: 'center',
+    gap: 28,
+  },
+  // zone cliquable sans fond (pour garder l’apparence “texte seul”)
+  linkHitbox: {
+    paddingVertical: 10,
     alignItems: 'center',
-    gap: 8,
   },
-  stepContainer: {
-    gap: 8,
-    marginBottom: 8,
-  },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
-    position: 'absolute',
+  // ++ taille texte plus grande (comme avant mais sans bandeau)
+  linkText: {
+    color: '#FFFFFF',
+    textTransform: 'uppercase',
+    fontFamily: 'Delight-ExtraBold',
+    fontSize: 34,       // ← augmente/réduis selon ton goût (ex: 32–34 pour encore plus gros)
+    letterSpacing: 0.8,
+    lineHeight: 34,
   },
 });
