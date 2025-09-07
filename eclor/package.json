@@ -15,7 +15,7 @@
     "reset-project": "node ./scripts/reset-project.js",
     "check:lock": "bash -lc 'set -e; echo Checking for npm artefacts...; (test ! -e ../package-lock.json || echo ../package-lock.json) && (test ! -e package-lock.json || echo package-lock.json) || true; find .. -name npm-shrinkwrap.json || true'",
     "check:mods": "bash -lc 'echo Node modules trees: && find .. -maxdepth 2 -name node_modules -type d'",
-    "clean:npm":  "bash -lc 'rm -f ../package-lock.json package-lock.json npm-shrinkwrap.json || true'"
+    "clean:npm": "bash -lc 'rm -f ../package-lock.json package-lock.json npm-shrinkwrap.json || true'"
   },
   "dependencies": {
     "@expo/vector-icons": "^14.1.0",
@@ -42,6 +42,7 @@
     "react-native-reanimated": "~3.17.4",
     "react-native-safe-area-context": "5.4.0",
     "react-native-screens": "~4.11.1",
+    "react-native-svg": "15.11.2",
     "react-native-web": "^0.20.0",
     "react-native-webview": "13.13.5"
   },
@@ -50,6 +51,7 @@
     "@types/react": "~19.0.10",
     "eslint": "^9.25.0",
     "eslint-config-expo": "~9.2.0",
+    "react-native-svg-transformer": "^1.5.1",
     "typescript": "~5.8.3"
   }
 }
