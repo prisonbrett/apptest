@@ -20,12 +20,12 @@ export default function AClasserScreen() {
   const isDesktop = screenW >= 1024;
   const isPhone = !isDesktop;
 
-  // marges / logo (réf)
+  // Marges / logo (réf)
   const H_MARGIN = 20;
   const LOGO_W = isPhone ? 120 : 160;
   const LOGO_H = Math.round(LOGO_W / 2.4);
 
-  // titrage (réf)
+  // Titrage (réf)
   const basePhone = 38;
   const baseDesktop = 38;
   let fontSize = Math.max(
@@ -35,12 +35,15 @@ export default function AClasserScreen() {
   if (!isPhone && screenW >= 600 && screenW <= 1024) fontSize = Math.max(fontSize, 44);
   const lineHeight = Math.round(fontSize + 6);
 
-  // état menu (ouvert par défaut sur desktop)
+  // Offset vertical pour démarrer le SideMenu sous le header
+  const headerOffset = insets.top + 10 + Math.max(LOGO_H, lineHeight) + 8;
+
+  // État menu (ouvert par défaut sur desktop)
   const [menuOpen, setMenuOpen] = useState<boolean>(isDesktop);
 
-  // helper navigation (+ fermeture du menu)
+  // Helper nav (+ fermeture menu)
   const go = (path: string) => {
-    router.replace(path as any); // évite l'erreur Href (Relative/External…)
+    router.replace(path as any);
     setMenuOpen(false);
   };
 
@@ -58,21 +61,17 @@ export default function AClasserScreen() {
     <View style={[styles.safe, { paddingTop: insets.top + 10 }]}>
       {/* HEADER */}
       <View style={[styles.headerRow, { paddingHorizontal: H_MARGIN }]}>
-        <LogoButton
-          width={LOGO_W}
-          height={LOGO_H}
-          onPress={() => router.replace('/' as any)}
-        />
+        <LogoButton width={LOGO_W} height={LOGO_H} onPress={() => router.replace('/' as any)} />
         <PageTag text="📥 À CLASSER" fontSize={fontSize} lineHeight={lineHeight} />
       </View>
 
-      {/* CONTENU CENTRÉ */}
+      {/* CONTENT */}
       <View style={styles.contentCol}>
-        <Text style={styles.placeholderTitle}>ICI : TES ÉLÉMENTS “À CLASSER”</Text>
+        <Text style={styles.placeholderTitle}>ICI : efvfbfbTES ÉLÉMENTS “À CLASSER”</Text>
         <Text style={styles.placeholderSub}>(on branchera la vraie liste ensuite)</Text>
       </View>
 
-      {/* MENU LATÉRAL (desktop) */}
+      {/* DESKTOP MENU */}
       {isDesktop && (
         <>
           <SideMenu
@@ -81,8 +80,8 @@ export default function AClasserScreen() {
             onRequestClose={() => setMenuOpen(false)}
             width={300}
             leftPadding={20}
+            topOffset={headerOffset}
           />
-
           {!menuOpen && (
             <MenuPill
               onPress={() => setMenuOpen(true)}
@@ -93,7 +92,7 @@ export default function AClasserScreen() {
         </>
       )}
 
-      {/* MOBILE : bouton retour */}
+      {/* MOBILE BACK */}
       {!isDesktop && (
         <BackPill
           onPress={() => router.back()}
@@ -141,4 +140,4 @@ const styles = StyleSheet.create({
     fontSize: 12,
     textAlign: 'center',
   },
-});;
+});

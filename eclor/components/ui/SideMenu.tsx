@@ -9,6 +9,7 @@ import {
   Animated,
   StyleProp,
   ViewStyle,
+  StyleSheet as RNStyleSheet,
 } from 'react-native';
 
 export type MenuItem = {
@@ -19,11 +20,12 @@ export type MenuItem = {
 
 type Props = {
   items: MenuItem[];
-  open: boolean;                 // ← contrôle d'ouverture
-  onRequestClose: () => void;    // ← fermeture (clic dehors / Esc)
-  width?: number;                // largeur du panneau (def. 300)
-  leftPadding?: number;          // marge visuelle à gauche (def. 20)
-  style?: StyleProp<ViewStyle>;  // optionnel (rarement utile)
+  open: boolean;
+  onRequestClose: () => void;
+  width?: number;               // default 300
+  leftPadding?: number;         // default 20
+  topOffset?: number;           // NEW: pixels from the top where the menu should start
+  style?: StyleProp<ViewStyle>;
 };
 
 export default function SideMenu({
@@ -32,9 +34,9 @@ export default function SideMenu({
   onRequestClose,
   width = 300,
   leftPadding = 20,
+  topOffset = 0,                // default: stick to very top
   style,
 }: Props) {
-  // animation slide-in
   const t = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -45,25 +47,25 @@ export default function SideMenu({
     }).start();
   }, [open, t]);
 
-  // Fermer avec Escape (web)
+  // Close with Escape on web
   useEffect(() => {
     if (Platform.OS !== 'web' || !open) return;
-    const onKey = (e: KeyboardEvent) => {
+    const onKey = (e: any) => {
       if (e.key === 'Escape') onRequestClose();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [open, onRequestClose]);
 
-  if (!open) return null; // on ne rend rien si fermé (simple et efficace)
+  if (!open) return null;
 
   const translateX = t.interpolate({ inputRange: [0, 1], outputRange: [-20, 0] });
   const overlayLeft = width + leftPadding;
 
   return (
-    <View style={[StyleSheet.absoluteFillObject, styles.host]} pointerEvents="box-none">
-      {/* Colonne du panneau à gauche (au-dessus du contenu/overlay) */}
-      <View style={[styles.sideCol, { width, paddingLeft: leftPadding }]}>
+    <View style={[RNStyleSheet.absoluteFillObject, styles.host]} pointerEvents="box-none">
+      {/* Panel column (starts below header) */}
+      <View style={[styles.sideCol, { width, paddingLeft: leftPadding, top: topOffset }]}>
         <Animated.View
           style={[
             styles.wrap,
@@ -72,12 +74,10 @@ export default function SideMenu({
           ]}
           pointerEvents="auto"
         >
-          {/* Entête */}
           <View style={styles.header}>
             <Text style={styles.title}>Menu</Text>
           </View>
 
-          {/* Liste */}
           <View style={styles.list}>
             {items.map((it) => {
               const isAmort = /AMORTISSEMENTS/i.test(it.label);
@@ -111,11 +111,10 @@ export default function SideMenu({
         </Animated.View>
       </View>
 
-      {/* Overlay cliquable à DROITE du panneau (ne couvre pas la colonne menu) */}
+      {/* Click-outside overlay (also starts below header) */}
       <Pressable
-        style={[styles.overlay, { left: overlayLeft }]}
+        style={[styles.overlay, { left: overlayLeft, top: topOffset }]}
         onPress={onRequestClose}
-        // éviter la bordure bleue de focus sur web
         {...(Platform.OS === 'web' ? { onFocus: (e) => (e.target as any).blur() } : {})}
         accessibilityLabel="Fermer le menu"
       />
@@ -124,15 +123,13 @@ export default function SideMenu({
 }
 
 const styles = StyleSheet.create({
-  host: {
-    zIndex: 40, // le panneau passera à 60 dans sideCol
-  },
+  host: { zIndex: 4 },
   sideCol: {
     position: 'absolute',
     left: 0,
-    top: 0, bottom: 0,
+    bottom: 0,
     overflow: 'visible',
-    zIndex: 60, // au-dessus de l’overlay
+    zIndex: 8,
   },
   wrap: {
     backgroundColor: 'rgba(255,255,255,0.06)',
@@ -148,8 +145,9 @@ const styles = StyleSheet.create({
   },
   overlay: {
     position: 'absolute',
-    top: 0, right: 0, bottom: 0,
-    zIndex: 50,
+    right: 0,
+    bottom: 0,
+    zIndex: 5,
     backgroundColor: 'transparent',
   },
   header: {
@@ -166,10 +164,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     opacity: 0.9,
   },
-  list: {
-    gap: 8,
-    marginTop: 4,
-  },
+  list: { gap: 8, marginTop: 4 },
   row: {
     borderRadius: 12,
     paddingVertical: 10,
@@ -178,12 +173,8 @@ const styles = StyleSheet.create({
     // @ts-ignore web-only
     cursor: Platform.OS === 'web' ? 'pointer' : undefined,
   },
-  rowHover: {
-    backgroundColor: 'rgba(255,255,255,0.08)',
-  },
-  rowActive: {
-    backgroundColor: 'rgba(255,255,255,0.18)',
-  },
+  rowHover: { backgroundColor: 'rgba(255,255,255,0.08)' },
+  rowActive: { backgroundColor: 'rgba(255,255,255,0.18)' },
   rowText: {
     color: '#fff',
     fontFamily: 'Delight-ExtraBold',
@@ -191,10 +182,6 @@ const styles = StyleSheet.create({
     fontSize: 18,
     letterSpacing: 0.5,
   },
-  rowTextActive: {
-    letterSpacing: 0.6,
-  },
-  rowTextAmort: {
-    letterSpacing: 0.45,
-  },
+  rowTextActive: { letterSpacing: 0.6 },
+  rowTextAmort: { letterSpacing: 0.45 },
 });
