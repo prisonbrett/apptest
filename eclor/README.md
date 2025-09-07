@@ -1,50 +1,67 @@
-# Welcome to your Expo app 👋
+📂 Structure du repo
+	•	Le repo GitHub s’appelle eclor-app.
+	•	Le vrai projet Expo est dans le sous-dossier eclor/.
+👉 Toutes les commandes doivent être lancées depuis eclor/, pas depuis la racine du repo.
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+Arbo simplifiée :
+eclor-app/              # racine repo (git)
+ ├── eclor/             # projet Expo
+ │    ├── app/          # pages expo-router
+ │    ├── components/   # composants React
+ │    ├── app.json
+ │    ├── package.json
+ │    ├── yarn.lock
+ │    └── node_modules/ (local, ignoré par git)
+ └── .gitignore         # ignore .expo, node_modules, etc.
 
-## Get started
 
-1. Install dependencies
 
-   ```bash
-   npm install
-   ```
+⚙️ Gestionnaire de paquets
+	•	👉 Yarn uniquement (version 1.22.x actuellement).
+	•	Pas de package-lock.json → supprimé pour éviter les conflits avec npm.
+	•	Dépendances figées dans yarn.lock.
 
-2. Start the app
+🚀 Commandes principales
 
-   ```bash
-   npx expo start
-   ```
+   Depuis eclor/ :
+   # Installer les dépendances
+   yarn install
 
-In the output, you'll find options to open the app in a
+   # Lancer en mode web
+   yarn dev:web
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+   # Lancer avec Expo Go (tunnel)
+   yarn dev:tunnel
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+   # Vérifier la santé du projet
+   yarn doctor   # alias de npx expo-doctor
 
-## Get a fresh project
+🩺 Santé du projet
+	•	SDK Expo : 53 (dernier à ce jour).
+	•	React Native : 0.79.5.
+	•	TypeScript : ~5.8.3 (aligné SDK).
+	•	@types/react : ~19.0.10 (aligné SDK).
+	•	expo-doctor → doit afficher 17/17 checks passed ✅.
 
-When you're ready, run:
+📦 Mises à jour de dépendances
+   •	Pour rester compatible Expo SDK, utiliser :
+      npx expo install <package>
+      (et non yarn add ou npm install <pkg>@latest).
+	•	Vérifier les versions attendues :
+      npx expo install --check
+	•	Pour les dev deps (TypeScript, types…) → suivre ce que recommande expo-doctor. 
 
-```bash
-npm run reset-project
-```
+🔐 Bonnes pratiques
+	•	Ne jamais committer node_modules/ ou .expo/.
+	•	.expo/ est ignoré via .gitignore (vérifié ✅).
+	•	En cas de doute :     
+      git ls-files .expo   # doit rien afficher
+   •	Si un jour tu vois des versions dupliquées → optionnel :
+      npx yarn-deduplicate -s fewer yarn.lock && yarn install
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
-
-## Learn more
-
-To learn more about developing your project with Expo, look at the following resources:
-
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
-
-## Join the community
-
-Join our community of developers creating universal apps.
-
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+❗ Points importants à retenir
+	•	Toujours travailler depuis eclor/ (et pas eclor-app/).
+	•	Projet full Yarn, ne jamais repasser à npm.
+	•	SDK 53 = dernier disponible actuellement → pas de “SDK 54” encore.
+	•	expo-doctor est la référence → doit rester à 17/17.
+	•	Les warnings “deprecated” lors des installs sont normaux et sans impact.
