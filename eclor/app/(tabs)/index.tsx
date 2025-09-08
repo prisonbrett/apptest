@@ -18,13 +18,12 @@ export default function HomeScreen() {
   const LOGO_W = isPhone ? 120 : 160;
   const LOGO_H = Math.round(LOGO_W / 2.4);
 
-  const basePhone = 38;
-  const baseDesktop = 38;
-  let fontSize = Math.max(
-    22,
-    Math.min(isPhone ? basePhone : baseDesktop, screenW * (isPhone ? 0.08 : 0.045))
-  );
-  if (!isPhone && screenW >= 600 && screenW <= 1024) fontSize = Math.max(fontSize, 44);
+  let fontSize;
+  if (isPhone) {
+    fontSize = Math.max(22, Math.min(screenW * 0.08, 32)); // Clamped between 22 and 32
+  } else {
+    fontSize = Math.max(32, Math.min(screenW * 0.04, 50)); // Clamped between 32 and 50
+  }
   const lineHeight = Math.round(fontSize + 6);
 
   return (
@@ -35,8 +34,8 @@ export default function HomeScreen() {
         <PageTag text="HOME" fontSize={fontSize} lineHeight={lineHeight} />
       </View>
 
-      {/* MENU centré plein écran (comme Finances/Dépenses) */}
-      <View style={styles.menuAbs} pointerEvents="box-none">
+      {/* MENU centré */}
+      <View style={styles.menuContainer}>
         <Pressable
           onPress={() => router.push('/tasks')}
           style={({ hovered, pressed }) => [
@@ -92,11 +91,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: 8,
-    zIndex: 10,
   },
-  menuAbs: {
-    position: 'absolute',
-    top: 0, bottom: 0, left: 0, right: 0,
+  menuContainer: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     rowGap: 40,
