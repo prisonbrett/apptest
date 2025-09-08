@@ -38,6 +38,7 @@ type Props<T = any> = {
   /** Footer fixe (clé de colonne -> contenu) */
   footerRow?: Partial<Record<string, React.ReactNode>>;
   footerHeight?: number; // 40 par défaut
+  footerLeftPadding?: number;
 };
 
 function defaultLabelize(key: string) {
@@ -70,6 +71,7 @@ export default function TableView<T>({
   onColumnResize,
   footerRow,
   footerHeight = 40,
+  footerLeftPadding,
 }: Props<T>) {
   const hasData = data.length > 0;
 
@@ -93,39 +95,37 @@ export default function TableView<T>({
   }, [resize, onColumnResize]);
 
   const renderHeader = () => (
-    <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-      <View style={[styles.headerRow, dense && styles.headerRowDense]}>
-        {columns.map((col) => {
-          const wCtrl = columnWidths?.[String(col.key)];
-          const w = typeof wCtrl === 'number' ? wCtrl : col.width;
-          const box = w != null ? { width: w, minWidth: w, maxWidth: w } : { flex: col.flex ?? 1 };
+    <View style={[styles.headerRow, dense && styles.headerRowDense]}>
+      {columns.map((col) => {
+        const wCtrl = columnWidths?.[String(col.key)];
+        const w = typeof wCtrl === 'number' ? wCtrl : col.width;
+        const box = w != null ? { width: w, minWidth: w, maxWidth: w } : { flex: col.flex ?? 1 };
 
-          return (
-            <View key={String(col.key)} style={[styles.cell, styles.headerCell, box]}>
-              <Text
-                style={[styles.headerText, alignStyle(col.align ?? col.textAlign)]}
-                numberOfLines={1}
-              >
-                {col.label ?? col.title ?? defaultLabelize(String(col.key))}
-              </Text>
+        return (
+          <View key={String(col.key)} style={[styles.cell, styles.headerCell, box]}>
+            <Text
+              style={[styles.headerText, alignStyle(col.align ?? col.textAlign)]}
+              numberOfLines={1}
+            >
+              {col.label ?? col.title ?? defaultLabelize(String(col.key))}
+            </Text>
 
-              {Platform.OS === 'web' && resizable ? (
-                <View
-                  style={styles.resizer}
-                  // @ts-ignore (événement web)
-                  onMouseDown={(e: any) => {
-                    const startW = (w ?? 160);
-                    setResize({ key: String(col.key), startX: e.clientX, startW });
-                    e.preventDefault();
-                    e.stopPropagation();
-                  }}
-                />
-              ) : null}
-            </View>
-          );
-        })}
-      </View>
-    </ScrollView>
+            {Platform.OS === 'web' && resizable ? (
+              <View
+                style={styles.resizer}
+                // @ts-ignore (événement web)
+                onMouseDown={(e: any) => {
+                  const startW = (w ?? 160);
+                  setResize({ key: String(col.key), startX: e.clientX, startW });
+                  e.preventDefault();
+                  e.stopPropagation();
+                }}
+              />
+            ) : null}
+          </View>
+        );
+      })}
+    </View>
   );
 
   const renderRow = (row: T, i: number) => {
@@ -180,12 +180,12 @@ export default function TableView<T>({
 
   return (
     <View style={[styles.wrap, maxHeight ? { maxHeight } : null]}>
-      {/* HEADER */}
-      {header}
-
-      {/* BODY + FOOTER */}
       <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-        <View style={{ flex: 1, minWidth: '100%', position: 'relative' }}>
+        <View style={{ flex: 1, minWidth: '100%' }}>
+          {/* HEADER */}
+          {header}
+
+          {/* BODY (vertical scroll) */}
           <ScrollView
             style={maxHeight ? { maxHeight: footerRow ? Math.max(0, maxHeight - footerHeight) : maxHeight } : undefined}
             contentContainerStyle={footerRow ? { paddingBottom: footerHeight } : undefined}
@@ -200,26 +200,24 @@ export default function TableView<T>({
             )}
           </ScrollView>
 
-          {/* FOOTER FIXE */}
+          {/* FOOTER (fixed at bottom of vertical scroll) */}
           {footerRow ? (
             <View style={[styles.footerRow, { height: footerHeight }]}>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                <View style={styles.footerInner}>
-                  {columns.map((col) => {
-                    const wCtrl = columnWidths?.[String(col.key)];
-                    const w = typeof wCtrl === 'number' ? wCtrl : col.width ?? 120;
-                    const node = footerRow[String(col.key)];
-                    const isText = typeof node === 'string' || typeof node === 'number';
-                    return (
-                      <View key={String(col.key)} style={{ width: w, minWidth: w, maxWidth: w, paddingRight: 12, justifyContent: 'center' }}>
-                        {isText
-                          ? <Text style={[styles.footerText, alignStyle(col.align ?? col.textAlign)]}>{String(node)}</Text>
-                          : node ?? null}
-                      </View>
-                    );
-                  })}
-                </View>
-              </ScrollView>
+              <View style={[styles.footerInner, { paddingLeft: footerLeftPadding ?? 12 }]}>
+                {columns.map((col) => {
+                  const wCtrl = columnWidths?.[String(col.key)];
+                  const w = typeof wCtrl === 'number' ? wCtrl : col.width ?? 120;
+                  const node = footerRow[String(col.key)];
+                  const isText = typeof node === 'string' || typeof node === 'number';
+                  return (
+                    <View key={String(col.key)} style={{ width: w, minWidth: w, maxWidth: w, paddingRight: 12, justifyContent: 'center' }}>
+                      {isText
+                        ? <Text style={[styles.footerText, alignStyle(col.align ?? col.textAlign)]}>{String(node)}</Text>
+                        : node ?? null}
+                    </View>
+                  );
+                })}
+              </View>
             </View>
           ) : null}
         </View>
@@ -289,7 +287,7 @@ const styles = StyleSheet.create({
   footerInner: {
     flexDirection: 'row',
     paddingVertical: 8,
-    paddingHorizontal: 12,
+    paddingRight: 12, // left is now a prop
   },
   footerText: {
     color: '#fff',

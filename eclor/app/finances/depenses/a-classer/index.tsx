@@ -20,15 +20,9 @@ import {
   DEPENSES_TYPES,
   matchOption,
 } from '@/constants/DepensesSchema';
+import { parseSheetDateLoose, fmtISO } from '@/lib/dateSerial';
 
 // --- helpers
-function dateFromSerial(n: any): string {
-  if (n == null || n === '') return '';
-  const num = typeof n === 'string' ? Number(n) : n;
-  if (!isFinite(num)) return String(n);
-  const ms = (num - 25569) * 86400 * 1000;
-  try { return new Date(ms).toISOString().slice(0, 10); } catch { return String(n); }
-}
 const euro = (n?: number | null) =>
   !n || !Number.isFinite(n) || n === 0 ? '' :
   `${Number(n).toLocaleString('fr-FR',{ minimumFractionDigits:2, maximumFractionDigits:2 })} €`;
@@ -74,7 +68,7 @@ export default function AClasserScreen() {
   }, [colWidths]);
 
   const isDesktop = screenW >= 1024;
-  const isPhone = !isDesktop;
+  const isPhone = screenW < 768; // Consistent definition
 
   // Marges / logo
   const H_MARGIN = 20;
@@ -82,10 +76,12 @@ export default function AClasserScreen() {
   const LOGO_H = Math.round(LOGO_W / 2.4);
 
   // Titrage
-  const basePhone = 38;
-  const baseDesktop = 38;
-  let fontSize = Math.max(22, Math.min(isPhone ? basePhone : baseDesktop, screenW * (isPhone ? 0.08 : 0.045)));
-  if (!isPhone && screenW >= 600 && screenW <= 1024) fontSize = Math.max(fontSize, 44);
+  let fontSize;
+  if (isPhone) {
+    fontSize = Math.max(22, Math.min(screenW * 0.08, 32)); // Clamped between 22 and 32
+  } else {
+    fontSize = Math.max(32, Math.min(screenW * 0.04, 50)); // Clamped between 32 and 50
+  }
   const lineHeight = Math.round(fontSize + 6);
 
   const headerOffset = insets.top + 10 + Math.max(LOGO_H, lineHeight) + 8;
@@ -110,11 +106,11 @@ export default function AClasserScreen() {
         const mapped: Row[] = body.map((r) => ({
           label:   r[0] ?? '',
           montant: Number(String(r[1] ?? 0).toString().replace(/\s/g, '').replace(',', '.')) || 0,
-          date:    dateFromSerial(r[2]),
+          date:    fmtISO(parseSheetDateLoose(r[2])),
           facture: r[3] ?? '',
           cat:     r[4] ?? '',
           type:    r[5] ?? '',
-          echeance: dateFromSerial(r[9]),
+          echeance: fmtISO(parseSheetDateLoose(r[9])),
           jours:   r[10] ?? '',
           estAnnuel: Number(r[11] ?? 0) || 0,
           url:     r[12] ?? '',
@@ -305,6 +301,9 @@ export default function AClasserScreen() {
     alignSelf = 'flex-start';
   }
 
+  const pillVisible = !isDesktop || (isDesktop && !menuOpen);
+  const footerPadding = pillVisible ? 90 : 12;
+
   return (
     <View style={[styles.safe, { paddingTop: insets.top + 10 }]}>
       {/* HEADER */}
@@ -330,6 +329,7 @@ export default function AClasserScreen() {
             onColumnResize={(k,w) => setColWidths(prev => ({ ...prev, [k]: w }))}
             footerRow={footerRow}
             footerHeight={44}
+            footerLeftPadding={footerPadding}
           />
         </View>
       </View>
