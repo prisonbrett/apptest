@@ -1,7 +1,7 @@
 // lib/GoogleSheets.ts
 import { SignJWT, importPKCS8 } from "jose";
 
-const SCOPES = ["https://www.googleapis.com/auth/spreadsheets.readonly"];
+const SCOPES = ["https://www.googleapis.com/auth/spreadsheets"];
 
 function env(name: string) {
   return (
@@ -54,4 +54,33 @@ export async function readSheetRange(sheetId: string, rangeA1: string) {
   const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
   if (!res.ok) throw new Error(`Sheets error ${res.status}: ${await res.text()}`);
   return res.json() as Promise<{ range: string; values?: any[][] }>;
+}
+
+// --- NEW: écrire 1 cellule A1
+export async function writeCell(sheetId: string, tab: string, a1: string, value: string | number) {
+  const token = await getAccessToken();
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(
+    `'${tab}'!${a1}`
+  )}?valueInputOption=USER_ENTERED`;
+
+  const body = { range: `'${tab}'!${a1}`, values: [[value]] };
+  const res = await fetch(url, {
+    method: "PUT",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`Sheets write error ${res.status}: ${await res.text()}`);
+  return res.json();
+}
+
+// util: 0->A, 1->B...
+export function colLetter(idxZero: number) {
+  let n = idxZero + 1;
+  let s = '';
+  while (n > 0) {
+    const m = (n - 1) % 26;
+    s = String.fromCharCode(65 + m) + s;
+    n = Math.floor((n - 1) / 26);
+  }
+  return s;
 }

@@ -1,6 +1,7 @@
+// app/finances/depenses/a-classer/index.tsx
 import React, { useMemo, useEffect, useState } from 'react';
 import TableView, { TableColumn } from '@/components/ui/TableView';
-import { View, StyleSheet, useWindowDimensions, Text, Linking } from 'react-native';
+import { View, StyleSheet, useWindowDimensions, TextInput, Text, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -13,13 +14,14 @@ import { readSheetRange } from '@/lib/GoogleSheets';
 
 import SingleSelect from '@/components/ui/SingleSelect';
 import {
+  DEPENSES_SHEET_NAME,
   DEPENSES_HEADERS,
   DEPENSES_CATEGORIES,
   DEPENSES_TYPES,
   matchOption,
 } from '@/constants/DepensesSchema';
 
-// --- date serial -> YYYY-MM-DD
+// --- helpers
 function dateFromSerial(n: any): string {
   if (n == null || n === '') return '';
   const num = typeof n === 'string' ? Number(n) : n;
@@ -27,25 +29,24 @@ function dateFromSerial(n: any): string {
   const ms = (num - 25569) * 86400 * 1000;
   try { return new Date(ms).toISOString().slice(0, 10); } catch { return String(n); }
 }
+const euro = (n?: number | null) =>
+  !n || !Number.isFinite(n) || n === 0 ? '' :
+  `${Number(n).toLocaleString('fr-FR',{ minimumFractionDigits:2, maximumFractionDigits:2 })} €`;
 
-type LocalMenuItem = { label: string; active?: boolean; onPress?: () => void };
-
-// lignes lues A:Q (une partie seulement affichée)
 type Row = {
-  label: string;       // A
-  montant: number;     // B
-  date: string;        // C
+  label: string;       // A  (edit)
+  montant: number;     // B  (edit)
+  date: string;        // C  (edit)
   facture: string;     // D
-  cat: string;         // E
-  type?: string;       // F
-  duree?: number | null;  // I
-  echeance?: string;      // J
-  jours?: string;         // K
-  estAnnuel?: number;     // L
-  url?: string;           // M
-  mensualite?: number;    // O
-  cumule?: number;        // P
-  id?: string;            // Q
+  cat: string;         // E  (edit)
+  type: string;        // F  (edit)
+  echeance?: string;   // J
+  jours?: string;      // K
+  estAnnuel?: number;  // L
+  url?: string;        // M  (edit)
+  mensualite?: number; // O
+  cumule?: number;     // P
+  id?: string;         // Q
 };
 
 export default function AClasserScreen() {
@@ -53,16 +54,24 @@ export default function AClasserScreen() {
   const insets = useSafeAreaInsets();
   const { width: screenW, height: screenH } = useWindowDimensions();
 
-  // ENV
   const SHEET_ID =
     process.env.EXPO_PUBLIC_GOOGLE_SHEET_ID ??
     process.env.GOOGLE_SHEET_ID ??
     '';
-  const TAB = '💰Dépenses';
-  const RANGE = `'${TAB}'!A:Q`; // lit tout
+  const RANGE = `'${DEPENSES_SHEET_NAME}'!A:Q`;
 
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
+
+  // persistance des largeurs colonnes
+  const LS_KEY_W = 'a-classer:colW';
+  const [colWidths, setColWidths] = useState<Record<string, number>>(() => {
+    if (typeof window === 'undefined') return {};
+    try { return JSON.parse(localStorage.getItem(LS_KEY_W) || '{}'); } catch { return {}; }
+  });
+  useEffect(() => {
+    if (typeof window !== 'undefined') localStorage.setItem(LS_KEY_W, JSON.stringify(colWidths));
+  }, [colWidths]);
 
   const isDesktop = screenW >= 1024;
   const isPhone = !isDesktop;
@@ -72,7 +81,7 @@ export default function AClasserScreen() {
   const LOGO_W = isPhone ? 120 : 160;
   const LOGO_H = Math.round(LOGO_W / 2.4);
 
-  // Titres
+  // Titrage
   const basePhone = 38;
   const baseDesktop = 38;
   let fontSize = Math.max(22, Math.min(isPhone ? basePhone : baseDesktop, screenW * (isPhone ? 0.08 : 0.045)));
@@ -80,102 +89,24 @@ export default function AClasserScreen() {
   const lineHeight = Math.round(fontSize + 6);
 
   const headerOffset = insets.top + 10 + Math.max(LOGO_H, lineHeight) + 8;
-  const TABLE_MAX_H = Math.max(240, screenH - headerOffset - (insets.bottom + 24));
+  const TABLE_MAX_H = Math.max(240, screenH - headerOffset - (insets.bottom + 28));
 
-  // Menu
+  // menu
   const [menuOpen, setMenuOpen] = useState<boolean>(isDesktop);
   const go = (path: string) => { router.replace(path as any); setMenuOpen(false); };
 
-  const items: LocalMenuItem[] = [
-    { label: '📥 À CLASSER', active: true, onPress: () => go('/finances/depenses/a-classer') },
-    { label: '📅 MOIS', onPress: () => go('/finances/depenses/mois') },
-    { label: '📊 TRIMESTRE', onPress: () => go('/finances/depenses/trimestre') },
-    { label: '🗓️ ANNÉE', onPress: () => go('/finances/depenses/annee') },
-    { label: '🏷️ CATÉGORIE', onPress: () => go('/finances/depenses/categorie') },
-    { label: '🔄 ABONNEMENTS', onPress: () => go('/finances/depenses/abonnements') },
-    { label: '⏳ AMORTISSEMENTS', onPress: () => go('/finances/depenses/amortissements') },
-  ];
-
-  // Colonnes (tu peux en retirer si tu veux plus compact)
-  const columns: TableColumn<Row>[] = useMemo(
-    () => [
-      { key: 'date',  label: DEPENSES_HEADERS.datePaiement, width: 200,
-        render: (row) => row.date || '' },
-
-      { key: 'label', label: DEPENSES_HEADERS.libelle, width: 420,
-        render: (row) => (
-          <Text numberOfLines={1} style={{ color: '#fff', fontFamily: 'Delight-Medium' }}>
-            {row.label || ''}
-          </Text>
-        ),
-      },
-
-      { key: 'cat',   label: DEPENSES_HEADERS.categorie, width: 230,
-        render: (row, i) => {
-          const current = matchOption(row.cat, DEPENSES_CATEGORIES);
-          return (
-            <SingleSelect
-              options={DEPENSES_CATEGORIES.map(o => ({ value: o.value, label: o.label, emoji: o.emoji, color: o.color }))}
-              value={current?.value ?? null}
-              onChange={(v) => {
-                setRows(prev => { const next=[...prev]; next[i]={...next[i], cat: v?String(v):''}; return next; });
-              }}
-              placeholder=""
-            />
-          );
-        },
-      },
-
-      { key: 'type',  label: DEPENSES_HEADERS.type, width: 200,
-        render: (row, i) => {
-          const current = matchOption(row.type, DEPENSES_TYPES);
-          return (
-            <SingleSelect
-              options={DEPENSES_TYPES.map(o => ({ value: o.value, label: o.label, emoji: o.emoji, color: o.color }))}
-              value={current?.value ?? null}
-              onChange={(v) => {
-                setRows(prev => { const next=[...prev]; next[i]={...next[i], type: v?String(v):''}; return next; });
-              }}
-              placeholder=""
-            />
-          );
-        },
-      },
-
-      { key: 'echeance', label: DEPENSES_HEADERS.echeance, width: 180,
-        render: (row) => row.echeance || '' },
-
-      { key: 'jours', label: DEPENSES_HEADERS.joursRestants, width: 160,
-        render: (row) => row.jours ?? '' },
-
-      { key: 'estAnnuel', label: DEPENSES_HEADERS.estimationAnnuel, width: 160, align: 'right',
-        render: (row) => (!row.estAnnuel ? '' :
-          `${Number(row.estAnnuel).toLocaleString('fr-FR',{ minimumFractionDigits:2, maximumFractionDigits:2 })} €`) },
-
-      { key: 'mensualite', label: DEPENSES_HEADERS.mensualite, width: 160, align: 'right',
-        render: (row) => (!row.mensualite ? '' :
-          `${Number(row.mensualite).toLocaleString('fr-FR',{ minimumFractionDigits:2, maximumFractionDigits:2 })} €`) },
-
-      { key: 'cumule', label: DEPENSES_HEADERS.cumule, width: 160, align: 'right',
-        render: (row) => (!row.cumule ? '' :
-          `${Number(row.cumule).toLocaleString('fr-FR',{ minimumFractionDigits:2, maximumFractionDigits:2 })} €`) },
-    ],
-    [rows]
-  );
-
-  // Fetch
+  // fetch
   useEffect(() => {
     let mounted = true;
     (async () => {
       try {
-        if (!SHEET_ID) { console.warn('SHEET_ID manquant'); setRows([]); return; }
+        if (!SHEET_ID) { setRows([]); return; }
         setLoading(true);
-
         const data = await readSheetRange(SHEET_ID, RANGE);
         const values: any[][] = data?.values ?? [];
         if (values.length <= 1) { if (mounted) setRows([]); return; }
 
-        const body = values.slice(1); // skip header
+        const body = values.slice(1);
         const mapped: Row[] = body.map((r) => ({
           label:   r[0] ?? '',
           montant: Number(String(r[1] ?? 0).toString().replace(/\s/g, '').replace(',', '.')) || 0,
@@ -183,8 +114,6 @@ export default function AClasserScreen() {
           facture: r[3] ?? '',
           cat:     r[4] ?? '',
           type:    r[5] ?? '',
-          // G/H ignorés ici
-          duree:   r[8] == null || r[8] === '' ? null : Number(r[8]),
           echeance: dateFromSerial(r[9]),
           jours:   r[10] ?? '',
           estAnnuel: Number(r[11] ?? 0) || 0,
@@ -197,6 +126,7 @@ export default function AClasserScreen() {
         if (mounted) setRows(mapped);
       } catch (e) {
         console.error('readSheetRange error:', e);
+        if (mounted) setRows([]);
       } finally {
         if (mounted) setLoading(false);
       }
@@ -204,7 +134,167 @@ export default function AClasserScreen() {
     return () => { mounted = false; };
   }, [SHEET_ID, RANGE]);
 
-  // Layout (largeur alignée sur le menu)
+  // édition locale
+  const setField = <K extends keyof Row>(i: number, key: K, value: Row[K]) => {
+    setRows(prev => { const next=[...prev]; next[i]={...next[i], [key]: value}; return next; });
+  };
+
+  // inputs
+  const TextField = ({ value, onChange, width }: { value: string; onChange: (v: string) => void; width?: number }) => (
+    <TextInput
+      value={value}
+      onChangeText={onChange}
+      placeholder=""
+      style={{
+        color: '#fff',
+        fontFamily: 'Delight-Medium',
+        fontSize: 14,
+        paddingVertical: 6,
+        paddingHorizontal: 8,
+        minHeight: 30,
+        borderRadius: 8,
+        backgroundColor: 'rgba(255,255,255,0.08)',
+        outlineStyle: 'none' as any,
+        width,
+      }}
+    />
+  );
+
+  // ✅ FIX keyboardType
+  const MoneyField = ({ value, onChange }: { value: number; onChange: (n: number) => void }) => {
+    const kb =
+      Platform.OS === 'ios' ? 'decimal-pad'
+      : Platform.OS === 'android' ? 'numeric'
+      : undefined; // web: on n’envoie rien
+
+    return (
+      <TextInput
+        value={String(value ?? 0)}
+        onChangeText={(t) => {
+          const n = Number(String(t).replace(/\s/g, '').replace(',', '.'));
+          onChange(Number.isFinite(n) ? n : 0);
+        }}
+        {...(kb ? { keyboardType: kb as any } : {})}
+        style={{
+          color: '#fff',
+          fontFamily: 'Delight-Medium',
+          fontSize: 14,
+          paddingVertical: 6,
+          paddingHorizontal: 8,
+          minHeight: 30,
+          borderRadius: 8,
+          backgroundColor: 'rgba(255,255,255,0.08)',
+          textAlign: 'right',
+          outlineStyle: 'none' as any,
+        }}
+      />
+    );
+  };
+
+  // colonnes
+  const columns: TableColumn<Row>[] = useMemo(() => [
+    {
+      key: 'date',
+      label: DEPENSES_HEADERS.datePaiement,
+      width: 180,
+      render: (row, i) => <TextField value={row.date || ''} onChange={(v) => setField(i, 'date', v)} />,
+    },
+    {
+      key: 'label',
+      label: DEPENSES_HEADERS.libelle,
+      width: 420,
+      render: (row, i) => <TextField value={row.label} onChange={(v) => setField(i, 'label', v)} />,
+    },
+    {
+      key: 'cat',
+      label: DEPENSES_HEADERS.categorie,
+      width: 230,
+      render: (row, i) => {
+        const current = matchOption(row.cat, DEPENSES_CATEGORIES);
+        return (
+          <SingleSelect
+            options={DEPENSES_CATEGORIES as any}
+            value={current?.value ?? null}
+            onChange={(v) => setField(i, 'cat', v ? String(v) : '')}
+            placeholder=""
+          />
+        );
+      },
+    },
+    {
+      key: 'type',
+      label: DEPENSES_HEADERS.type,
+      width: 200,
+      render: (row, i) => {
+        const current = matchOption(row.type, DEPENSES_TYPES);
+        return (
+          <SingleSelect
+            options={DEPENSES_TYPES as any}
+            value={current?.value ?? null}
+            onChange={(v) => setField(i, 'type', v ? String(v) : '')}
+            placeholder=""
+          />
+        );
+      },
+    },
+    { key: 'echeance', label: DEPENSES_HEADERS.echeance, width: 160,
+      render: (row) => <Text style={{ color:'#fff', fontFamily:'Delight-Medium' }}>{row.echeance || ''}</Text> },
+    { key: 'jours', label: DEPENSES_HEADERS.joursRestants, width: 120,
+      render: (row) => <Text style={{ color:'#fff', fontFamily:'Delight-Medium' }}>{row.jours || ''}</Text> },
+    {
+      key: 'montant',
+      label: DEPENSES_HEADERS.montantTTC,
+      width: 140,
+      align: 'right',
+      render: (row, i) => <MoneyField value={row.montant ?? 0} onChange={(n) => setField(i, 'montant', n)} />,
+    },
+    {
+      key: 'estAnnuel',
+      label: DEPENSES_HEADERS.estimationAnnuel,
+      width: 150,
+      align: 'right',
+      render: (row) => <Text style={{ color:'#fff', fontFamily:'Delight-Medium', textAlign:'right' as const }}>{euro(row.estAnnuel)}</Text>,
+    },
+    {
+      key: 'mensualite',
+      label: DEPENSES_HEADERS.mensualite,
+      width: 150,
+      align: 'right',
+      render: (row) => <Text style={{ color:'#fff', fontFamily:'Delight-Medium', textAlign:'right' as const }}>{euro(row.mensualite)}</Text>,
+    },
+    {
+      key: 'cumule',
+      label: DEPENSES_HEADERS.cumule,
+      width: 150,
+      align: 'right',
+      render: (row) => <Text style={{ color:'#fff', fontFamily:'Delight-Medium', textAlign:'right' as const }}>{euro(row.cumule)}</Text>,
+    },
+    {
+      key: 'url',
+      label: DEPENSES_HEADERS.url,
+      width: 240,
+      render: (row, i) => <TextField value={row.url || ''} onChange={(v) => setField(i, 'url', v)} />,
+    },
+  ], [rows]);
+
+  // totaux footer
+  const sum = (k: keyof Row) => rows.reduce((acc, r) => acc + (Number((r as any)[k]) || 0), 0);
+  const footerRow = useMemo(() => {
+    const node = (n: number) => (
+      <Text style={{ color:'#fff', fontFamily:'Delight-ExtraBold', textAlign:'right' as const }}>
+        {euro(n)}
+      </Text>
+    );
+    return {
+      date: <Text style={{ color:'#fff', fontFamily:'Delight-ExtraBold' }}>TOTAL</Text>,
+      montant: node(sum('montant')),
+      estAnnuel: node(sum('estAnnuel')),
+      mensualite: node(sum('mensualite')),
+      cumule: node(sum('cumule')),
+    } as Partial<Record<string, React.ReactNode>>;
+  }, [rows]);
+
+  // Layout (aligné au menu)
   const MENU_W = 300; const MENU_PAD = 20; const GUTTER = 24;
   let tableWidth = screenW - 2 * GUTTER;
   let tableOffsetLeft = 0;
@@ -223,7 +313,7 @@ export default function AClasserScreen() {
         <PageTag text="📥 À CLASSER" fontSize={fontSize} lineHeight={lineHeight} />
       </View>
 
-      {/* CONTENT */}
+      {/* TABLE */}
       <View style={[styles.contentCol, { paddingBottom: insets.bottom + 12 }]}>
         <View style={[
           styles.tableWrap,
@@ -234,9 +324,12 @@ export default function AClasserScreen() {
             data={rows}
             loading={loading}
             dense={false}
-            inferColumns={false}
-            maxHeight={TABLE_MAX_H}   // ← scroll vertical interne (web & natif)
+            maxHeight={TABLE_MAX_H}
             resizable
+            columnWidths={colWidths}
+            onColumnResize={(k,w) => setColWidths(prev => ({ ...prev, [k]: w }))}
+            footerRow={footerRow}
+            footerHeight={44}
           />
         </View>
       </View>
@@ -245,16 +338,22 @@ export default function AClasserScreen() {
       {isDesktop && (
         <>
           <SideMenu
-            items={items}
+            items={[
+              { label: '📥 À CLASSER', active: true, onPress: () => go('/finances/depenses/a-classer') },
+              { label: '📅 MOIS', onPress: () => go('/finances/depenses/mois') },
+              { label: '📊 TRIMESTRE', onPress: () => go('/finances/depenses/trimestre') },
+              { label: '🗓️ ANNÉE', onPress: () => go('/finances/depenses/annee') },
+              { label: '🏷️ CATÉGORIE', onPress: () => go('/finances/depenses/categorie') },
+              { label: '🔄 ABONNEMENTS', onPress: () => go('/finances/depenses/abonnements') },
+              { label: '⏳ AMORTISSEMENTS', onPress: () => go('/finances/depenses/amortissements') },
+            ]}
             open={menuOpen}
             onRequestClose={() => setMenuOpen(false)}
             width={MENU_W}
             leftPadding={MENU_PAD}
-            topOffset={headerOffset}
+            topOffset={insets.top + 10 + Math.max(LOGO_H, lineHeight) + 8}
           />
-          {!menuOpen && (
-            <MenuPill onPress={() => setMenuOpen(true)} left={H_MARGIN} bottom={insets.bottom + 20} />
-          )}
+          {!menuOpen && <MenuPill onPress={() => setMenuOpen(true)} left={H_MARGIN} bottom={insets.bottom + 20} />}
         </>
       )}
 

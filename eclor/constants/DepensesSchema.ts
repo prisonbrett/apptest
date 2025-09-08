@@ -55,7 +55,7 @@ export type OptionItem = {
 };
 
 export const DEPENSES_CATEGORIES: readonly OptionItem[] = [
-  { value: '🅿️ Parking',    label: 'Parking',    emoji: '🅿️', color: 'blue' },
+  { value: '🅿️ Parking',    label: 'Parking',    emoji: '🅿️', color: 'blue' },
   { value: '⛽️ Essence',    label: 'Essence',    emoji: '⛽️', color: 'red' },
   { value: '⚙️ Software',    label: 'Software',   emoji: '⚙️', color: 'amber' },
   { value: '🍽️ Repas',      label: 'Repas',      emoji: '🍽️', color: 'amber' },
@@ -69,9 +69,9 @@ export const DEPENSES_CATEGORIES: readonly OptionItem[] = [
 ];
 
 export const DEPENSES_TYPES: readonly OptionItem[] = [
-  { value: '📌 Type',          label: 'Type',          emoji: '📌' },
   { value: '⏳ Amortissement', label: 'Amortissement', emoji: '⏳' },
   { value: '🔁 Abonnement',    label: 'Abonnement',    emoji: '🔁' },
+  { value: '', label: '', emoji: '' },
 ];
 
 /** ----- Helpers UI (utile côté web) ----- */

@@ -1,4 +1,5 @@
-import React, { useMemo, useRef, useState } from 'react';
+// components/ui/TableView.tsx
+import React, { useMemo, useRef, useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -6,45 +7,45 @@ import {
   ScrollView,
   Pressable,
   Platform,
-  GestureResponderEvent,
 } from 'react-native';
 
 export type TableColumn<T = any> = {
   key: keyof T | string;
-  label?: string;          // texte header
-  title?: string;          // alias legacy
-  width?: number;          // px
-  flex?: number;           // ratio si pas de width
+  label?: string;
+  title?: string; // compat
+  width?: number;
+  flex?: number;
   align?: 'left' | 'center' | 'right';
-  textAlign?: 'left' | 'center' | 'right'; // alias legacy
+  textAlign?: 'left' | 'center' | 'right'; // compat
   render?: (row: T, rowIndex: number) => React.ReactNode;
 };
 
 type Props<T = any> = {
-  columns?: TableColumn<T>[];
+  columns: TableColumn<T>[];
   data: T[];
   loading?: boolean;
   emptyText?: string;
-  onRowPress?: (row: T, index: number) => void;
   dense?: boolean;
-  maxHeight?: number;          // active le scroll vertical interne
+  maxHeight?: number;
   hideHeaderWhenEmpty?: boolean;
-  inferColumns?: boolean;
-  labelizeKey?: (k: string) => string;
-  resizable?: boolean;         // redimensionnement des colonnes (web)
-};
+  onRowPress?: (row: T, index: number) => void;
 
-type NormalizedColumn<T> = {
-  key: keyof T | string;
-  label: string;
-  width?: number;
-  flex?: number;
-  align: 'left' | 'center' | 'right';
-  render: (row: T, rowIndex: number) => React.ReactNode;
+  /** Redimensionnement colonnes (web) */
+  resizable?: boolean;
+  columnWidths?: Record<string, number>;
+  onColumnResize?: (key: string, width: number) => void;
+
+  /** Footer fixe (clé de colonne -> contenu) */
+  footerRow?: Partial<Record<string, React.ReactNode>>;
+  footerHeight?: number; // 40 par défaut
 };
 
 function defaultLabelize(key: string) {
-  return key.replace(/([A-Z])/g, ' $1').replace(/_/g, ' ').trim().toUpperCase();
+  return key
+    .replace(/([A-Z])/g, ' $1')
+    .replace(/_/g, ' ')
+    .trim()
+    .toUpperCase();
 }
 
 function alignStyle(align?: 'left' | 'center' | 'right') {
@@ -55,152 +56,172 @@ function alignStyle(align?: 'left' | 'center' | 'right') {
   }
 }
 
-function normalizeColumn<T>(col: TableColumn<T>, labelizeKey: (k: string) => string): NormalizedColumn<T> {
-  const label = col.label ?? col.title ?? labelizeKey(String(col.key));
-  const align = col.align ?? col.textAlign ?? 'left';
-  const flex  = col.flex ?? (col.width ? undefined : 1);
-  return { key: col.key, label, width: col.width, flex, align, render: col.render ?? (() => null) };
-}
-
-export default function TableView<T = any>({
+export default function TableView<T>({
   columns,
   data,
   loading = false,
   emptyText = 'Aucune donnée',
-  onRowPress,
   dense = false,
   maxHeight,
   hideHeaderWhenEmpty = false,
-  inferColumns = false,
-  labelizeKey = defaultLabelize,
-  resizable = true,
+  onRowPress,
+  resizable = false,
+  columnWidths,
+  onColumnResize,
+  footerRow,
+  footerHeight = 40,
 }: Props<T>) {
-  const effColumns = useMemo<NormalizedColumn<T>[]>(() => {
-    if ((!columns && data.length > 0) || inferColumns) {
-      const first = data[0] ?? {};
-      const keys = Object.keys(first) as (keyof T | string)[];
-      return keys.map(k => normalizeColumn({ key: k, label: labelizeKey(String(k)), flex: 1 }, labelizeKey));
-    }
-    return (columns ?? []).map(c => normalizeColumn(c, labelizeKey));
-  }, [columns, data, inferColumns, labelizeKey]);
-
-  const [widths, setWidths] = useState<Record<string, number | undefined>>(
-    Object.fromEntries(effColumns.map(c => [String(c.key), c.width]))
-  );
-
-  const dragRef = useRef<{ key: string; startX: number; startW: number } | null>(null);
-
   const hasData = data.length > 0;
 
-  const cellDims = (col: NormalizedColumn<T>) => {
-    const w = widths[String(col.key)];
-    return w != null ? { width: w, minWidth: w, maxWidth: w } : { flex: col.flex ?? 1 };
-  };
+  // --- Resize (web uniquement)
+  const [resize, setResize] = useState<{ key: string; startX: number; startW: number } | null>(null);
+  useEffect(() => {
+    if (!resize) return;
+    const onMove = (e: MouseEvent) => {
+      if (!onColumnResize) return;
+      const dx = e.clientX - resize.startX;
+      const w = Math.max(60, Math.min(800, resize.startW + dx));
+      onColumnResize(resize.key, w);
+    };
+    const onUp = () => setResize(null);
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+    return () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+  }, [resize, onColumnResize]);
 
-  // resize handlers
-  const onResizeGrant = (key: string) => (e: GestureResponderEvent) => {
-    const x = e.nativeEvent.pageX ?? e.nativeEvent.locationX;
-    const startW = widths[key] ?? 140;
-    dragRef.current = { key, startX: x, startW };
-  };
-  const onResizeMove = (e: GestureResponderEvent) => {
-    if (!dragRef.current) return;
-    const x = e.nativeEvent.pageX ?? e.nativeEvent.locationX;
-    const dx = x - dragRef.current.startX;
-    const next = Math.max(80, Math.min(520, dragRef.current.startW + dx));
-    setWidths(prev => ({ ...prev, [dragRef.current!.key]: next }));
-  };
-  const onResizeEnd = () => { dragRef.current = null; };
+  const renderHeader = () => (
+    <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+      <View style={[styles.headerRow, dense && styles.headerRowDense]}>
+        {columns.map((col) => {
+          const wCtrl = columnWidths?.[String(col.key)];
+          const w = typeof wCtrl === 'number' ? wCtrl : col.width;
+          const box = w != null ? { width: w, minWidth: w, maxWidth: w } : { flex: col.flex ?? 1 };
 
-  const renderCells = (row: T, i: number) =>
-    effColumns.map((col) => {
-      const raw = (row as any)?.[col.key];
-      const rendered = col.render ? col.render(row, i) : raw;
-      const isEmptyNumber = typeof rendered === 'number' && rendered === 0;
-      const content = rendered == null || rendered === '' || isEmptyNumber ? '' : rendered;
+          return (
+            <View key={String(col.key)} style={[styles.cell, styles.headerCell, box]}>
+              <Text
+                style={[styles.headerText, alignStyle(col.align ?? col.textAlign)]}
+                numberOfLines={1}
+              >
+                {col.label ?? col.title ?? defaultLabelize(String(col.key))}
+              </Text>
 
-      return (
-        <View key={String(col.key)} style={[styles.cell, cellDims(col)]}>
-          {typeof content === 'string' || typeof content === 'number'
-            ? <Text style={[styles.cellText, alignStyle(col.align)]} numberOfLines={1}>{String(content)}</Text>
-            : content}
-        </View>
-      );
-    });
-
-  // web: height fixe; natif: maxHeight
-  const verticalStyle = maxHeight
-    ? (Platform.OS === 'web' ? ({ height: maxHeight } as any) : ({ maxHeight } as any))
-    : undefined;
-
-  return (
-    <View style={styles.wrap}>
-      {/* HORIZONTAL */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={{ flexGrow: 0 }}
-      >
-        <View>
-          {/* HEADER */}
-          {(effColumns.length > 0 && (hasData || !hideHeaderWhenEmpty)) && (
-            <View style={[styles.headerRow, dense && styles.headerRowDense]}>
-              {effColumns.map((col) => (
-                <View key={String(col.key)} style={[styles.cell, styles.headerCell, cellDims(col)]}>
-                  <Text style={[styles.headerText, alignStyle(col.align)]} numberOfLines={1}>
-                    {col.label || String(col.key)}
-                  </Text>
-                  {resizable && (
-                    <View
-                      style={styles.colResizer}
-                      onStartShouldSetResponder={() => true}
-                      onResponderGrant={onResizeGrant(String(col.key))}
-                      onResponderMove={onResizeMove}
-                      onResponderRelease={onResizeEnd}
-                      onResponderTerminate={onResizeEnd}
-                    />
-                  )}
-                </View>
-              ))}
+              {Platform.OS === 'web' && resizable ? (
+                <View
+                  style={styles.resizer}
+                  // @ts-ignore (événement web)
+                  onMouseDown={(e: any) => {
+                    const startW = (w ?? 160);
+                    setResize({ key: String(col.key), startX: e.clientX, startW });
+                    e.preventDefault();
+                    e.stopPropagation();
+                  }}
+                />
+              ) : null}
             </View>
-          )}
+          );
+        })}
+      </View>
+    </ScrollView>
+  );
 
-          {/* VERTICAL */}
-          <ScrollView
-            style={verticalStyle}
-            showsVerticalScrollIndicator
-            nestedScrollEnabled
-            contentContainerStyle={{ flexGrow: 0 }}
-          >
-            <View style={{ flex: 1 }}>
-              {loading ? (
-                <View style={styles.stateWrap}><Text style={styles.stateText}>Chargement…</Text></View>
-              ) : !hasData ? (
-                <View style={styles.stateWrap}><Text style={styles.stateText}>{emptyText}</Text></View>
+  const renderRow = (row: T, i: number) => {
+    const rowContent = (
+      <>
+        {columns.map((col) => {
+          const raw = (row as any)?.[col.key];
+          const content = col.render ? col.render(row, i) : (raw ?? '');
+          const wCtrl = columnWidths?.[String(col.key)];
+          const w = typeof wCtrl === 'number' ? wCtrl : col.width;
+
+          return (
+            <View
+              key={String(col.key)}
+              style={[
+                styles.cell,
+                w != null ? { width: w, minWidth: w, maxWidth: w } : { flex: col.flex ?? 1 },
+              ]}
+            >
+              {typeof content === 'string' || typeof content === 'number' ? (
+                <Text style={[styles.cellText, alignStyle(col.align ?? col.textAlign)]} numberOfLines={1}>
+                  {String(content)}
+                </Text>
               ) : (
-                data.map((row, i) =>
-                  onRowPress ? (
-                    <Pressable
-                      key={i}
-                      onPress={() => onRowPress(row, i)}
-                      accessibilityRole="button"
-                      style={({ hovered, pressed }) => [
-                        styles.dataRow, dense && styles.dataRowDense,
-                        Platform.OS === 'web' && hovered && styles.rowHover,
-                        pressed && styles.rowPressed,
-                      ]}
-                    >
-                      {renderCells(row, i)}
-                    </Pressable>
-                  ) : (
-                    <View key={i} style={[styles.dataRow, dense && styles.dataRowDense]}>
-                      {renderCells(row, i)}
-                    </View>
-                  )
-                )
+                content
               )}
             </View>
+          );
+        })}
+      </>
+    );
+
+    if (!onRowPress) return <View key={i} style={[styles.dataRow, dense && styles.dataRowDense]}>{rowContent}</View>;
+    return (
+      <Pressable
+        key={i}
+        onPress={() => onRowPress(row, i)}
+        accessibilityRole="button"
+        style={({ hovered, pressed }) => [
+          styles.dataRow,
+          dense && styles.dataRowDense,
+          Platform.OS === 'web' && hovered && styles.rowHover,
+          pressed && styles.rowPressed,
+        ]}
+      >
+        {rowContent}
+      </Pressable>
+    );
+  };
+
+  const header = (!hideHeaderWhenEmpty || hasData) ? renderHeader() : null;
+
+  return (
+    <View style={[styles.wrap, maxHeight ? { maxHeight } : null]}>
+      {/* HEADER */}
+      {header}
+
+      {/* BODY + FOOTER */}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+        <View style={{ flex: 1, minWidth: '100%', position: 'relative' }}>
+          <ScrollView
+            style={maxHeight ? { maxHeight: footerRow ? Math.max(0, maxHeight - footerHeight) : maxHeight } : undefined}
+            contentContainerStyle={footerRow ? { paddingBottom: footerHeight } : undefined}
+            showsVerticalScrollIndicator
+          >
+            {loading ? (
+              <View style={styles.stateWrap}><Text style={styles.stateText}>Chargement…</Text></View>
+            ) : !hasData ? (
+              <View style={styles.stateWrap}><Text style={styles.stateText}>{emptyText}</Text></View>
+            ) : (
+              data.map((r, i) => renderRow(r, i))
+            )}
           </ScrollView>
+
+          {/* FOOTER FIXE */}
+          {footerRow ? (
+            <View style={[styles.footerRow, { height: footerHeight }]}>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                <View style={styles.footerInner}>
+                  {columns.map((col) => {
+                    const wCtrl = columnWidths?.[String(col.key)];
+                    const w = typeof wCtrl === 'number' ? wCtrl : col.width ?? 120;
+                    const node = footerRow[String(col.key)];
+                    const isText = typeof node === 'string' || typeof node === 'number';
+                    return (
+                      <View key={String(col.key)} style={{ width: w, minWidth: w, maxWidth: w, paddingRight: 12, justifyContent: 'center' }}>
+                        {isText
+                          ? <Text style={[styles.footerText, alignStyle(col.align ?? col.textAlign)]}>{String(node)}</Text>
+                          : node ?? null}
+                      </View>
+                    );
+                  })}
+                </View>
+              </ScrollView>
+            </View>
+          ) : null}
         </View>
       </ScrollView>
     </View>
@@ -221,22 +242,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: 'rgba(255,255,255,0.25)',
-    paddingVertical: 12,
-    paddingHorizontal: 14,
+    paddingVertical: 12, // header un peu plus grand
+    paddingHorizontal: 12,
   },
   headerRowDense: { paddingVertical: 8 },
   headerCell: { position: 'relative' },
   headerText: {
     color: '#fff',
-    fontFamily: 'Delight-ExtraBold',        // ta police
+    fontFamily: 'Delight-ExtraBold',
     textTransform: 'uppercase',
-    letterSpacing: 0.8,
-    fontSize: 14,
+    letterSpacing: 0.6,
+    fontSize: 13, // + lisible
     opacity: 0.95,
-  },
-  colResizer: {
-    position: 'absolute', top: 0, right: 0, bottom: 0, width: 8,
-    ...Platform.select({ web: { cursor: 'col-resize' as any }, default: {} }),
   },
   dataRow: {
     flexDirection: 'row',
@@ -249,11 +266,34 @@ const styles = StyleSheet.create({
   rowHover: { backgroundColor: 'rgba(255,255,255,0.06)' },
   rowPressed: { backgroundColor: 'rgba(0,0,0,0.08)' },
   cell: { paddingRight: 12, justifyContent: 'center' },
-  cellText: {
-    color: '#fff',
-    fontFamily: 'Delight-SemiBold',        // ta police
-    fontSize: 14,
-  },
+  cellText: { color: '#fff', fontFamily: 'Delight-Medium', fontSize: 14 },
   stateWrap: { paddingVertical: 28, alignItems: 'center', justifyContent: 'center' },
-  stateText: { color: 'rgba(255,255,255,0.85)', fontFamily: 'Delight-SemiBold', fontSize: 13 },
+  stateText: { color: 'rgba(255,255,255,0.85)', fontFamily: 'Delight-Medium', fontSize: 13 },
+  resizer: {
+    position: 'absolute',
+    top: 4,
+    right: -4,
+    bottom: 4,
+    width: 8,
+    cursor: 'col-resize',
+    ...Platform.select({ web: { backgroundColor: 'transparent' } as any, default: {} }),
+  },
+  footerRow: {
+    position: 'absolute',
+    left: 0, right: 0, bottom: 0,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(255,255,255,0.25)',
+    backgroundColor: 'rgba(0,0,0,0.10)',
+    justifyContent: 'center',
+  },
+  footerInner: {
+    flexDirection: 'row',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+  },
+  footerText: {
+    color: '#fff',
+    fontFamily: 'Delight-ExtraBold',
+    fontSize: 13,
+  },
 });
