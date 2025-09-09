@@ -1,7 +1,7 @@
 // app/finances/depenses/a-classer/index.tsx
 import React, { useMemo, useEffect, useState } from 'react';
 import { View, StyleSheet, useWindowDimensions, Text } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, Href } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import LogoButton from '@/components/ui/LogoButton';
@@ -23,7 +23,6 @@ import EditableTextCell from '@/components/ui/cells/EditableTextCell';
 import MoneyCell from '@/components/ui/cells/MoneyCell';
 import DateCell from '@/components/ui/cells/DateCell';
 import SelectCell from '@/components/ui/cells/SelectCell';
-import type { Href } from 'expo-router';
 
 // --- helpers
 const euro = (n?: number | null) =>
@@ -76,11 +75,8 @@ export default function AClasserScreen() {
   const TABLE_MAX_H = Math.max(240, screenH - headerOffset - (insets.bottom + 28));
 
   // menu
-const [menuOpen, setMenuOpen] = useState<boolean>(isDesktop);
-const go = (path: string) => {
-  router.replace(path as Href);   // ✅ bon cast
-  setMenuOpen(false);
-};
+  const [menuOpen, setMenuOpen] = useState<boolean>(isDesktop);
+  const go = (path: string) => { router.replace(path as Href); setMenuOpen(false); };
 
   // fetch
   useEffect(() => {
@@ -161,13 +157,13 @@ const go = (path: string) => {
       key: 'categorie',
       label: DEPENSES_HEADERS.categorie,
       width: 230,
-      render: (row, i) => <SelectCell value={row.categorie} options={DEPENSES_CATEGORIES} onCommit={(v) => setField(i, 'categorie', v)} />,
+      render: (row, i) => <SelectCell value={row.categorie} options={[...DEPENSES_CATEGORIES]} onCommit={(v) => setField(i, 'categorie', v)} />,
     },
     {
       key: 'type',
       label: DEPENSES_HEADERS.type,
       width: 200,
-      render: (row, i) => <SelectCell value={row.type} options={DEPENSES_TYPES} onCommit={(v) => setField(i, 'type', v)} />,
+      render: (row, i) => <SelectCell value={row.type} options={[...DEPENSES_TYPES]} onCommit={(v) => setField(i, 'type', v)} />,
     },
     {
       key: 'echeance',

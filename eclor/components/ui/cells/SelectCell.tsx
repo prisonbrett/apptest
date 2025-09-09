@@ -14,7 +14,7 @@ export default function SelectCell({
   return (
     <SingleSelect
       value={value}
-      options={options}
+      options={[...options]}
       onChange={onCommit}
       placeholder=""
     />
