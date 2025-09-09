@@ -8,7 +8,7 @@ export default function SelectCell({
   value, options, onCommit,
 }: {
   value: string | null;
-  options: Option[];
+  options: readonly Option[];
   onCommit: (v: string | null) => void | Promise<void>;
 }) {
   return (

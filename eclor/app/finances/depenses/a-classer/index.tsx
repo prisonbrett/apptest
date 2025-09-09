@@ -1,7 +1,6 @@
 // app/finances/depenses/a-classer/index.tsx
 import React, { useMemo, useEffect, useState } from 'react';
-import TableView, { TableColumn } from '@/components/ui/TableView';
-import { View, StyleSheet, useWindowDimensions, TextInput, Text, Platform } from 'react-native';
+import { View, StyleSheet, useWindowDimensions, Text } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -10,38 +9,28 @@ import PageTag from '@/components/ui/PageTag';
 import SideMenu from '@/components/ui/SideMenu';
 import MenuPill from '@/components/ui/MenuPill';
 import BackPill from '@/components/ui/BackPill';
+import TableView, { TableColumn } from '@/components/ui/TableView';
 import { readSheetRange } from '@/lib/GoogleSheets';
-
-import SingleSelect from '@/components/ui/SingleSelect';
 import {
   DEPENSES_SHEET_NAME,
   DEPENSES_HEADERS,
   DEPENSES_CATEGORIES,
   DEPENSES_TYPES,
-  matchOption,
 } from '@/constants/DepensesSchema';
-import { parseSheetDateLoose, fmtISO } from '@/lib/dateSerial';
+import { mapDepenses } from '@/lib/mapDepenses';
+import { fmtDDMMYYYY } from '@/lib/dateSerial';
+import EditableTextCell from '@/components/ui/cells/EditableTextCell';
+import MoneyCell from '@/components/ui/cells/MoneyCell';
+import DateCell from '@/components/ui/cells/DateCell';
+import SelectCell from '@/components/ui/cells/SelectCell';
+import type { Href } from 'expo-router';
 
 // --- helpers
 const euro = (n?: number | null) =>
   !n || !Number.isFinite(n) || n === 0 ? '' :
   `${Number(n).toLocaleString('fr-FR',{ minimumFractionDigits:2, maximumFractionDigits:2 })} €`;
 
-type Row = {
-  label: string;       // A  (edit)
-  montant: number;     // B  (edit)
-  date: string;        // C  (edit)
-  facture: string;     // D
-  cat: string;         // E  (edit)
-  type: string;        // F  (edit)
-  echeance?: string;   // J
-  jours?: string;      // K
-  estAnnuel?: number;  // L
-  url?: string;        // M  (edit)
-  mensualite?: number; // O
-  cumule?: number;     // P
-  id?: string;         // Q
-};
+type Row = ReturnType<typeof mapDepenses>[0];
 
 export default function AClasserScreen() {
   const router = useRouter();
@@ -52,9 +41,10 @@ export default function AClasserScreen() {
     process.env.EXPO_PUBLIC_GOOGLE_SHEET_ID ??
     process.env.GOOGLE_SHEET_ID ??
     '';
-  const RANGE = `'${DEPENSES_SHEET_NAME}'!A:Q`;
+  const RANGE = `'${DEPENSES_SHEET_NAME}'!A:N`; // Corrected range
 
   const [rows, setRows] = useState<Row[]>([]);
+  const [footerData, setFooterData] = useState<Partial<Record<keyof Row, React.ReactNode>> | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
 
   // persistance des largeurs colonnes
@@ -68,7 +58,7 @@ export default function AClasserScreen() {
   }, [colWidths]);
 
   const isDesktop = screenW >= 1024;
-  const isPhone = screenW < 768; // Consistent definition
+  const isPhone = !isDesktop;
 
   // Marges / logo
   const H_MARGIN = 20;
@@ -76,20 +66,21 @@ export default function AClasserScreen() {
   const LOGO_H = Math.round(LOGO_W / 2.4);
 
   // Titrage
-  let fontSize;
-  if (isPhone) {
-    fontSize = Math.max(22, Math.min(screenW * 0.08, 32)); // Clamped between 22 and 32
-  } else {
-    fontSize = Math.max(32, Math.min(screenW * 0.04, 50)); // Clamped between 32 and 50
-  }
+  const basePhone = 38;
+  const baseDesktop = 38;
+  let fontSize = Math.max(22, Math.min(isPhone ? basePhone : baseDesktop, screenW * (isPhone ? 0.08 : 0.045)));
+  if (!isPhone && screenW >= 600 && screenW <= 1024) fontSize = Math.max(fontSize, 44);
   const lineHeight = Math.round(fontSize + 6);
 
   const headerOffset = insets.top + 10 + Math.max(LOGO_H, lineHeight) + 8;
   const TABLE_MAX_H = Math.max(240, screenH - headerOffset - (insets.bottom + 28));
 
   // menu
-  const [menuOpen, setMenuOpen] = useState<boolean>(isDesktop);
-  const go = (path: string) => { router.replace(path as any); setMenuOpen(false); };
+const [menuOpen, setMenuOpen] = useState<boolean>(isDesktop);
+const go = (path: string) => {
+  router.replace(path as Href);   // ✅ bon cast
+  setMenuOpen(false);
+};
 
   // fetch
   useEffect(() => {
@@ -100,29 +91,41 @@ export default function AClasserScreen() {
         setLoading(true);
         const data = await readSheetRange(SHEET_ID, RANGE);
         const values: any[][] = data?.values ?? [];
-        if (values.length <= 1) { if (mounted) setRows([]); return; }
+        if (values.length <= 1) {
+          if (mounted) { setRows([]); setFooterData(null); }
+          return;
+        }
 
-        const body = values.slice(1);
-        const mapped: Row[] = body.map((r) => ({
-          label:   r[0] ?? '',
-          montant: Number(String(r[1] ?? 0).toString().replace(/\s/g, '').replace(',', '.')) || 0,
-          date:    fmtISO(parseSheetDateLoose(r[2])),
-          facture: r[3] ?? '',
-          cat:     r[4] ?? '',
-          type:    r[5] ?? '',
-          echeance: fmtISO(parseSheetDateLoose(r[9])),
-          jours:   r[10] ?? '',
-          estAnnuel: Number(r[11] ?? 0) || 0,
-          url:     r[12] ?? '',
-          mensualite: Number(r[14] ?? 0) || 0,
-          cumule: Number(r[15] ?? 0) || 0,
-          id:      r[16] ?? '',
-        }));
+        let body = values.slice(0);
+        let totalRowData: any[] | null = null;
+        if (body.length > 1 && String(body[body.length - 1][0]).toUpperCase() === 'TOTAL') {
+          totalRowData = body.pop() ?? null;
+        }
 
-        if (mounted) setRows(mapped);
+        const mapped = mapDepenses(body);
+
+        if (mounted) {
+          setRows(mapped);
+          if (totalRowData) {
+            const node = (val: any) => (
+              <Text style={{ color:'#fff', fontFamily:'Delight-ExtraBold', textAlign:'right' as const }}>
+                {euro(Number(String(val ?? 0).toString().replace(/\s/g, '').replace(',', '.')) || 0)}
+              </Text>
+            );
+            setFooterData({
+              libelle: <Text style={{ color:'#fff', fontFamily:'Delight-ExtraBold' }}>TOTAL</Text>,
+              montantTTC: node(totalRowData[1]),
+              estimationAnnuel: node(totalRowData[9]),
+              mensualite: node(totalRowData[11]),
+              cumule: node(totalRowData[12]),
+            });
+          } else {
+            setFooterData(null);
+          }
+        }
       } catch (e) {
         console.error('readSheetRange error:', e);
-        if (mounted) setRows([]);
+        if (mounted) { setRows([]); setFooterData(null); }
       } finally {
         if (mounted) setLoading(false);
       }
@@ -131,125 +134,66 @@ export default function AClasserScreen() {
   }, [SHEET_ID, RANGE]);
 
   // édition locale
-  const setField = <K extends keyof Row>(i: number, key: K, value: Row[K]) => {
-    setRows(prev => { const next=[...prev]; next[i]={...next[i], [key]: value}; return next; });
-  };
-
-  // inputs
-  const TextField = ({ value, onChange, width }: { value: string; onChange: (v: string) => void; width?: number }) => (
-    <TextInput
-      value={value}
-      onChangeText={onChange}
-      placeholder=""
-      style={{
-        color: '#fff',
-        fontFamily: 'Delight-Medium',
-        fontSize: 14,
-        paddingVertical: 6,
-        paddingHorizontal: 8,
-        minHeight: 30,
-        borderRadius: 8,
-        backgroundColor: 'rgba(255,255,255,0.08)',
-        outlineStyle: 'none' as any,
-        width,
-      }}
-    />
-  );
-
-  // ✅ FIX keyboardType
-  const MoneyField = ({ value, onChange }: { value: number; onChange: (n: number) => void }) => {
-    const kb =
-      Platform.OS === 'ios' ? 'decimal-pad'
-      : Platform.OS === 'android' ? 'numeric'
-      : undefined; // web: on n’envoie rien
-
-    return (
-      <TextInput
-        value={String(value ?? 0)}
-        onChangeText={(t) => {
-          const n = Number(String(t).replace(/\s/g, '').replace(',', '.'));
-          onChange(Number.isFinite(n) ? n : 0);
-        }}
-        {...(kb ? { keyboardType: kb as any } : {})}
-        style={{
-          color: '#fff',
-          fontFamily: 'Delight-Medium',
-          fontSize: 14,
-          paddingVertical: 6,
-          paddingHorizontal: 8,
-          minHeight: 30,
-          borderRadius: 8,
-          backgroundColor: 'rgba(255,255,255,0.08)',
-          textAlign: 'right',
-          outlineStyle: 'none' as any,
-        }}
-      />
-    );
+  const setField = (rowIndex: number, key: keyof Row, value: any) => {
+    setRows(prev => {
+      const next = [...prev];
+      next[rowIndex] = { ...next[rowIndex], [key]: value };
+      return next;
+    });
+    // Here you would also call a function to save the change to the backend/sheet
   };
 
   // colonnes
   const columns: TableColumn<Row>[] = useMemo(() => [
     {
-      key: 'date',
+      key: 'datePaiement',
       label: DEPENSES_HEADERS.datePaiement,
       width: 180,
-      render: (row, i) => <TextField value={row.date || ''} onChange={(v) => setField(i, 'date', v)} />,
+      render: (row, i) => <DateCell value={fmtDDMMYYYY(row.datePaiement)} onCommit={(v) => setField(i, 'datePaiement', v)} />,
     },
     {
-      key: 'label',
+      key: 'libelle',
       label: DEPENSES_HEADERS.libelle,
       width: 420,
-      render: (row, i) => <TextField value={row.label} onChange={(v) => setField(i, 'label', v)} />,
+      render: (row, i) => <EditableTextCell value={row.libelle} onCommit={(v) => setField(i, 'libelle', v)} />,
     },
     {
-      key: 'cat',
+      key: 'categorie',
       label: DEPENSES_HEADERS.categorie,
       width: 230,
-      render: (row, i) => {
-        const current = matchOption(row.cat, DEPENSES_CATEGORIES);
-        return (
-          <SingleSelect
-            options={DEPENSES_CATEGORIES as any}
-            value={current?.value ?? null}
-            onChange={(v) => setField(i, 'cat', v ? String(v) : '')}
-            placeholder=""
-          />
-        );
-      },
+      render: (row, i) => <SelectCell value={row.categorie} options={DEPENSES_CATEGORIES} onCommit={(v) => setField(i, 'categorie', v)} />,
     },
     {
       key: 'type',
       label: DEPENSES_HEADERS.type,
       width: 200,
-      render: (row, i) => {
-        const current = matchOption(row.type, DEPENSES_TYPES);
-        return (
-          <SingleSelect
-            options={DEPENSES_TYPES as any}
-            value={current?.value ?? null}
-            onChange={(v) => setField(i, 'type', v ? String(v) : '')}
-            placeholder=""
-          />
-        );
-      },
+      render: (row, i) => <SelectCell value={row.type} options={DEPENSES_TYPES} onCommit={(v) => setField(i, 'type', v)} />,
     },
-    { key: 'echeance', label: DEPENSES_HEADERS.echeance, width: 160,
-      render: (row) => <Text style={{ color:'#fff', fontFamily:'Delight-Medium' }}>{row.echeance || ''}</Text> },
-    { key: 'jours', label: DEPENSES_HEADERS.joursRestants, width: 120,
-      render: (row) => <Text style={{ color:'#fff', fontFamily:'Delight-Medium' }}>{row.jours || ''}</Text> },
     {
-      key: 'montant',
+      key: 'echeance',
+      label: DEPENSES_HEADERS.echeance,
+      width: 160,
+      render: (row) => <Text style={{ color:'#fff', fontFamily:'Delight-Medium', paddingHorizontal: 10 }}>{fmtDDMMYYYY(row.echeance)}</Text>,
+    },
+    {
+      key: 'joursRestants',
+      label: DEPENSES_HEADERS.joursRestants,
+      width: 120,
+      render: (row) => <Text style={{ color:'#fff', fontFamily:'Delight-Medium' }}>{row.joursRestants}</Text>
+    },
+    {
+      key: 'montantTTC',
       label: DEPENSES_HEADERS.montantTTC,
       width: 140,
       align: 'right',
-      render: (row, i) => <MoneyField value={row.montant ?? 0} onChange={(n) => setField(i, 'montant', n)} />,
+      render: (row, i) => <MoneyCell value={row.montantTTC} onCommit={(v) => setField(i, 'montantTTC', v)} />,
     },
     {
-      key: 'estAnnuel',
+      key: 'estimationAnnuel',
       label: DEPENSES_HEADERS.estimationAnnuel,
       width: 150,
       align: 'right',
-      render: (row) => <Text style={{ color:'#fff', fontFamily:'Delight-Medium', textAlign:'right' as const }}>{euro(row.estAnnuel)}</Text>,
+      render: (row) => <Text style={{ color:'#fff', fontFamily:'Delight-Medium', textAlign:'right' as const }}>{euro(row.estimationAnnuel)}</Text>,
     },
     {
       key: 'mensualite',
@@ -269,26 +213,29 @@ export default function AClasserScreen() {
       key: 'url',
       label: DEPENSES_HEADERS.url,
       width: 240,
-      render: (row, i) => <TextField value={row.url || ''} onChange={(v) => setField(i, 'url', v)} />,
+      render: (row, i) => <EditableTextCell value={row.url} onCommit={(v) => setField(i, 'url', v)} />,
     },
-  ], [rows]);
+  ], [rows, setField]);
 
   // totaux footer
-  const sum = (k: keyof Row) => rows.reduce((acc, r) => acc + (Number((r as any)[k]) || 0), 0);
   const footerRow = useMemo(() => {
+    if (footerData) return footerData;
+
+    // Fallback to client-side calculation if no footer data from sheet
+    const sum = (k: keyof Row) => rows.reduce((acc, r) => acc + (Number((r as any)[k]) || 0), 0);
     const node = (n: number) => (
       <Text style={{ color:'#fff', fontFamily:'Delight-ExtraBold', textAlign:'right' as const }}>
         {euro(n)}
       </Text>
     );
     return {
-      date: <Text style={{ color:'#fff', fontFamily:'Delight-ExtraBold' }}>TOTAL</Text>,
-      montant: node(sum('montant')),
-      estAnnuel: node(sum('estAnnuel')),
+      libelle: <Text style={{ color:'#fff', fontFamily:'Delight-ExtraBold' }}>TOTAL</Text>,
+      montantTTC: node(sum('montantTTC')),
+      estimationAnnuel: node(sum('estimationAnnuel')),
       mensualite: node(sum('mensualite')),
       cumule: node(sum('cumule')),
     } as Partial<Record<string, React.ReactNode>>;
-  }, [rows]);
+  }, [rows, footerData]);
 
   // Layout (aligné au menu)
   const MENU_W = 300; const MENU_PAD = 20; const GUTTER = 24;
@@ -301,14 +248,11 @@ export default function AClasserScreen() {
     alignSelf = 'flex-start';
   }
 
-  const pillVisible = !isDesktop || (isDesktop && !menuOpen);
-  const footerPadding = pillVisible ? 90 : 12;
-
   return (
     <View style={[styles.safe, { paddingTop: insets.top + 10 }]}>
       {/* HEADER */}
       <View style={[styles.headerRow, { paddingHorizontal: H_MARGIN }]}>
-        <LogoButton width={LOGO_W} height={LOGO_H} onPress={() => router.replace('/' as any)} />
+        <LogoButton width={LOGO_W} height={LOGO_H} onPress={() => router.replace({ pathname: '/' })} />
         <PageTag text="📥 À CLASSER" fontSize={fontSize} lineHeight={lineHeight} />
       </View>
 
@@ -329,7 +273,6 @@ export default function AClasserScreen() {
             onColumnResize={(k,w) => setColWidths(prev => ({ ...prev, [k]: w }))}
             footerRow={footerRow}
             footerHeight={44}
-            footerLeftPadding={footerPadding}
           />
         </View>
       </View>
@@ -353,12 +296,12 @@ export default function AClasserScreen() {
             leftPadding={MENU_PAD}
             topOffset={insets.top + 10 + Math.max(LOGO_H, lineHeight) + 8}
           />
-          {!menuOpen && <MenuPill onPress={() => setMenuOpen(true)} left={H_MARGIN} bottom={insets.bottom + 20} />}
+          {!menuOpen && <MenuPill onPress={() => setMenuOpen(true)} left={H_MARGIN} bottom={insets.bottom + 24} />}
         </>
       )}
 
       {/* BACK (mobile) */}
-      {!isDesktop && <BackPill onPress={() => router.back()} left={H_MARGIN} bottom={insets.bottom + 20} />}
+      {!isDesktop && <BackPill onPress={() => router.back()} left={H_MARGIN} bottom={insets.bottom + 24} />}
     </View>
   );
 }

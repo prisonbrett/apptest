@@ -47,14 +47,14 @@ export type DepenseRow = {
 /** ----- Options pour Catégories et Types ----- */
 export type BadgeColor = 'green' | 'red' | 'amber' | 'blue' | 'slate' | 'purple';
 
-export type OptionItem = {
+export type SelectOption = {
   value: string;   // valeur exacte stockée dans la Sheet
   label: string;   // label sans emoji
   emoji?: string;
   color?: BadgeColor;
 };
 
-export const DEPENSES_CATEGORIES: readonly OptionItem[] = [
+export const DEPENSES_CATEGORIES: readonly SelectOption[] = [
   { value: '🅿️ Parking',    label: 'Parking',    emoji: '🅿️', color: 'blue' },
   { value: '⛽️ Essence',    label: 'Essence',    emoji: '⛽️', color: 'red' },
   { value: '⚙️ Software',    label: 'Software',   emoji: '⚙️', color: 'amber' },
@@ -68,7 +68,7 @@ export const DEPENSES_CATEGORIES: readonly OptionItem[] = [
   { value: '🛡️ Assurance',   label: 'Assurance',  emoji: '🛡️', color: 'purple' },
 ];
 
-export const DEPENSES_TYPES: readonly OptionItem[] = [
+export const DEPENSES_TYPES: readonly SelectOption[] = [
   { value: '⏳ Amortissement', label: 'Amortissement', emoji: '⏳' },
   { value: '🔁 Abonnement',    label: 'Abonnement',    emoji: '🔁' },
   { value: '', label: '', emoji: '' },
@@ -88,7 +88,7 @@ export function badgeByColor(color?: BadgeColor) {
 }
 
 /** Tente de retrouver l’option à partir d’une valeur brute Sheet */
-export function matchOption(raw: unknown, options: readonly OptionItem[]) {
+export function matchOption(raw: unknown, options: readonly SelectOption[]) {
   if (raw == null) return null;
   const s = String(raw).trim();
 

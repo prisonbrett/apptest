@@ -39,3 +39,13 @@ export function fmtISO(d: Date | null) {
   const t = new Date(d.getTime() - d.getTimezoneOffset() * 60000);
   return t.toISOString().slice(0, 10);
 }
+
+/** DD/MM/YYYY pour l’affichage ('' si null/invalid) */
+export function fmtDDMMYYYY(d: Date | null) {
+  if (!d || !Number.isFinite(d.getTime())) return '';
+  const t = new Date(d.getTime() - d.getTimezoneOffset() * 60000);
+  const day = t.getUTCDate().toString().padStart(2, '0');
+  const month = (t.getUTCMonth() + 1).toString().padStart(2, '0');
+  const year = t.getUTCFullYear();
+  return `${day}/${month}/${year}`;
+}
